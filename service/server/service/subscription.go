@@ -240,7 +240,7 @@ func UpdateSubscription(index int, disconnectIfNecessary bool) (err error) {
 		}
 		infoServerRaws[i] = infoServerRaw
 	}
-	for link, cssIndexes := range connectedVmessInfo2CssIndex {
+	for _, cssIndexes := range connectedVmessInfo2CssIndex {
 		for _, cssIndex := range cssIndexes {
 			if disconnectIfNecessary {
 				err = Disconnect(*css.Get()[cssIndex], false)
@@ -249,10 +249,11 @@ func UpdateSubscription(index int, disconnectIfNecessary bool) (err error) {
 					return fmt.Errorf("UpdateSubscription: %v", reason)
 				}
 			} else {
-				// 将之前连接的节点append进去
-				// TODO: 变更ServerRaw时可能需要考虑
-				infoServerRaws = append(infoServerRaws, *link2Raw[link])
-				cssAfter[cssIndex].ID = len(infoServerRaws)
+				//不保留原连接，默认选中与原链接相同的节点Id
+				// 取出最大索引
+				if cssAfter[cssIndex].ID > len(infoServerRaws) {
+					cssAfter[cssIndex].ID = 1
+				}
 			}
 		}
 	}

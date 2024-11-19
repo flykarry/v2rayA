@@ -4,7 +4,7 @@ ADD .git ./.git
 RUN git describe --abbrev=0 --tags | tee ./version
 
 
-FROM node:lts-alpine AS builder-web
+FROM node:18.20.5-alpine AS builder-web
 ADD gui /build/gui
 WORKDIR /build/gui
 RUN echo "network-timeout 600000" >> .yarnrc
