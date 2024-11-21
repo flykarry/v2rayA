@@ -10,6 +10,7 @@ import (
 	"github.com/v2rayA/v2rayA/common/resolv"
 	"github.com/v2rayA/v2rayA/core/serverObj"
 	"github.com/v2rayA/v2rayA/core/touch"
+	"github.com/v2rayA/v2rayA/core/v2ray"
 	"github.com/v2rayA/v2rayA/db/configure"
 	"github.com/v2rayA/v2rayA/pkg/util/log"
 	"io"
@@ -251,8 +252,17 @@ func UpdateSubscription(index int, disconnectIfNecessary bool) (err error) {
 			} else {
 				//不保留原连接，默认选中与原链接相同的节点Id
 				// 取出最大索引
+				err = Disconnect(*css.Get()[cssIndex], false)
+
 				if cssAfter[cssIndex].ID > len(infoServerRaws) {
 					cssAfter[cssIndex].ID = 1
+				}
+				err = Connect(cssAfter[cssIndex])
+				if !v2ray.ProcessManager.Running() {
+					err := StartV2ray()
+					if err != nil {
+						return err
+					}
 				}
 			}
 		}
