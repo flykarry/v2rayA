@@ -212,7 +212,7 @@ func UpdateSubscription(index int, disconnectIfNecessary bool) (err error) {
 	}
 	infoServerRaws := make([]configure.ServerRaw, len(subscriptionInfos))
 	css := configure.GetConnectedServers()
-	cssAfter := css.Get()
+	//cssAfter := css.Get()
 	// serverObj.ServerObj is a pointer(interface), and shouldn't be as a key
 	link2Raw := make(map[string]*configure.ServerRaw)
 	connectedVmessInfo2CssIndex := make(map[string][]int)
@@ -228,48 +228,104 @@ func UpdateSubscription(index int, disconnectIfNecessary bool) (err error) {
 		}
 	}
 	//将列表更换为新的，并且找到一个跟现在连接的server值相等的，设为Connected，如果没有，则断开连接
+	//for i, info := range subscriptionInfos {
+	//	infoServerRaw := configure.ServerRaw{
+	//		ServerObj: info,
+	//	}
+	//	link := infoServerRaw.ServerObj.ExportToURL()
+	//	if cssIndexes, ok := connectedVmessInfo2CssIndex[link]; ok {
+	//		for _, cssIndex := range cssIndexes {
+	//			cssAfter[cssIndex].ID = i + 1
+	//		}
+	//		delete(connectedVmessInfo2CssIndex, link)
+	//	}
+	//	infoServerRaws[i] = infoServerRaw
+	//}
+	//for _, cssIndexes := range connectedVmessInfo2CssIndex {
+	//	for _, cssIndex := range cssIndexes {
+	//		if disconnectIfNecessary {
+	//			err = Disconnect(*css.Get()[cssIndex], false)
+	//			if err != nil {
+	//				reason := "failed to disconnect previous server"
+	//				return fmt.Errorf("UpdateSubscription: %v", reason)
+	//			}
+	//		} else {
+	//			//不保留原连接，默认选中与原链接相同的节点Id
+	//			// 取出最大索引
+	//			err = Disconnect(*css.Get()[cssIndex], false)
+	//
+	//			if cssAfter[cssIndex].ID > len(infoServerRaws) {
+	//				cssAfter[cssIndex].ID = 1
+	//			}
+	//			err = Connect(cssAfter[cssIndex])
+	//			if !v2ray.ProcessManager.Running() {
+	//				err := StartV2ray()
+	//				if err != nil {
+	//					return err
+	//				}
+	//			}
+	//		}
+	//	}
+	//}
+	//if err := configure.OverwriteConnects(configure.NewWhiches(cssAfter)); err != nil {
+	//	return err
+	//}
+	//重新创建whitch
+	var whichs []*configure.Which
+	for i, subscription := range subscriptions {
+		for j := range subscription.Servers {
+			w := &configure.Which{
+				TYPE:     configure.SubscriptionServerType,
+				ID:       j + 1,
+				Sub:      i,
+				Latency:  "",
+				Link:     "",
+				Outbound: "proxy",
+			}
+			whichs = append(whichs, w)
+		}
+	}
+
+	//筛除TIMEOUT节点
+	wt, err := Ping(whichs, 1*time.Second)
+	var filtered []*configure.Which // 创建一个新切片用于存储符合条件的元素
+	if err != nil {
+		return err
+	}
+	for _, w := range wt {
+		if w.Latency != "TIMEOUT" {
+			filtered = append(filtered, w)
+		}
+	}
+	//全部断连
+	for _, cssIndexes := range connectedVmessInfo2CssIndex {
+		for _, cssIndex := range cssIndexes {
+			err = Disconnect(*css.Get()[cssIndex], false)
+		}
+	}
+	//重新连接
+	for _, which := range filtered {
+		err = Connect(which)
+	}
+	//重写连接节点
+	if err := configure.OverwriteConnects(configure.NewWhiches(filtered)); err != nil {
+		return err
+	}
+	//启动代理
+	if !v2ray.ProcessManager.Running() {
+		err := StartV2ray()
+		if err != nil {
+			return err
+		}
+	}
+
 	for i, info := range subscriptionInfos {
 		infoServerRaw := configure.ServerRaw{
 			ServerObj: info,
 		}
-		link := infoServerRaw.ServerObj.ExportToURL()
-		if cssIndexes, ok := connectedVmessInfo2CssIndex[link]; ok {
-			for _, cssIndex := range cssIndexes {
-				cssAfter[cssIndex].ID = i + 1
-			}
-			delete(connectedVmessInfo2CssIndex, link)
-		}
 		infoServerRaws[i] = infoServerRaw
 	}
-	for _, cssIndexes := range connectedVmessInfo2CssIndex {
-		for _, cssIndex := range cssIndexes {
-			if disconnectIfNecessary {
-				err = Disconnect(*css.Get()[cssIndex], false)
-				if err != nil {
-					reason := "failed to disconnect previous server"
-					return fmt.Errorf("UpdateSubscription: %v", reason)
-				}
-			} else {
-				//不保留原连接，默认选中与原链接相同的节点Id
-				// 取出最大索引
-				err = Disconnect(*css.Get()[cssIndex], false)
 
-				if cssAfter[cssIndex].ID > len(infoServerRaws) {
-					cssAfter[cssIndex].ID = 1
-				}
-				err = Connect(cssAfter[cssIndex])
-				if !v2ray.ProcessManager.Running() {
-					err := StartV2ray()
-					if err != nil {
-						return err
-					}
-				}
-			}
-		}
-	}
-	if err := configure.OverwriteConnects(configure.NewWhiches(cssAfter)); err != nil {
-		return err
-	}
 	subscriptions[index].Servers = infoServerRaws
 	subscriptions[index].Status = string(touch.NewUpdateStatus())
 	subscriptions[index].Info = status
